@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer
+
+      - name: Install dependencies
+        run: composer install --no-dev --optimize-autoloader
+
+      - name: Get tag version
+        id: tag
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create plugin distribution
+        run: |
+          mkdir -p build/sawe-woocommerce-download-url-manager
+          cp -r --exclude=.git --exclude=.github --exclude=build --exclude=tests --exclude=.gitignore --exclude=composer.json --exclude=composer.lock --exclude=phpunit.xml --exclude=.editorconfig . build/sawe-woocommerce-download-url-manager/
+
+      - name: Create zip archive
+        run: |
+          cd build
+          zip -r sawe-woocommerce-download-url-manager.zip sawe-woocommerce-download-url-manager/
+
+      - name: Create Release Notes
+        id: release_notes
+        run: |
+          {
+            echo "## Release ${{ steps.tag.outputs.version }}"
+            echo ""
+            echo "### Changes"
+            echo ""
+            git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"- %h: %s (%an)" || echo "Initial release"
+          } > release_notes.md
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/sawe-woocommerce-download-url-manager.zip
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
